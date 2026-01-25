@@ -72,7 +72,7 @@ int main() {
             money += 100000;
             printf("돈 100,000원을 지급받았습니다!\n");
             Sleep(1500);
-            continue;
+            continue;  // 테스트용!!   실행시키실때는 여기 if문을 지우고 시작해주세요!
         }
 
         switch(menu) {

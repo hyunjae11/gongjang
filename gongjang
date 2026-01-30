@@ -3,315 +3,331 @@
 #include <windows.h>
 #include <time.h>
 
-// ------------------ 자원 보유량 ------------------
-int tree = 0, stone = 0, iron = 0, gold = 0, diamond = 0;         // 채집 자원
-int p_tree = 0, p_stone = 0, p_iron = 0, p_gold = 0, p_diamond = 0; // 가공 자원
 
-// ------------------ 자원 가격 ------------------
-int price_tree = 10, price_stone = 20, price_iron = 50, price_gold = 150, price_diamond = 300;
 
-// ------------------ 돈 ------------------
+// ================== 자원 정의 ==================
+enum { TREE, STONE, IRON, GOLD, DIAMOND, RESOURCE_COUNT };
+
+const char* resource_name[RESOURCE_COUNT] =
+{ "나무", "돌", "철", "금", "다이아몬드" };
+
+// ================== 자원 ==================
+int resource[RESOURCE_COUNT] = {0};
+int processed[RESOURCE_COUNT] = {0};
+
+// ================== 가격 ==================
+int price[RESOURCE_COUNT] = {10,20,50,150,300};
+
+// ================== 속도 ==================
+int collect_speed[RESOURCE_COUNT] = {3000,3000,3000,3000,3000};
+int process_speed[RESOURCE_COUNT] = {2000,3000,4000,5000,6000};
+
+// ================== 상태 ==================
 int money = 0;
+int resource_level = 1;
 
-// ------------------ 자원 발견 레벨 ------------------
-int resource_level = 1; // 1=나무만, 2=돌, 3=철, 4=금, 5=다이아몬드
+// 업그레이드 비용
+int collect_upgrade_cost = 300;
+int process_upgrade_cost = 400;
 
-// ------------------ 채집 속도(ms) ------------------
-int collect_speed_tree = 2000, collect_speed_stone = 4000, collect_speed_iron = 6000, collect_speed_gold = 8000, collect_speed_diamond = 10000;
+// 자동화
+int auto_collect_unlocked = 0;
+int auto_collect_level = 1;
+int auto_process_unlocked = 0;
 
-// ------------------ 가공 속도(ms) ------------------
-int process_speed_tree = 2000, process_speed_stone = 3000, process_speed_iron = 4000, process_speed_gold = 5000, process_speed_diamond = 6000;
+// 자동 판매
+int auto_sell_unlocked = 0;
+int auto_sell_on = 0;
 
-// ------------------ 도박 활성화 ------------------
-int gambling_unlocked = 0;
+// 도박
+int gamble_unlocked = 0;
 
-// ------------------ 함수 선언 ------------------
-void show_resources();
-void gather_resource();
-void process_resource();
-void sell_menu();
-void shop();
-void gambling();
+// ================== 입력 버퍼 정리 ==================
+void clear_input() {
+    while(getchar()!='\n');
+}
 
-// ------------------ 메인 ------------------
-int main() {
-    int menu;
-    srand((unsigned)time(NULL));
+void clear_console_input() {
+    FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+}
 
-    while(1) {
+// ================== 진행 게이지 ==================
+void progress_bar(const char* title, int total_ms) {
+    clear_console_input();
+
+    int steps = 20;
+    int step = total_ms / steps;
+
+    for(int i=0;i<=steps;i++){
         system("cls");
-        printf("돈: %d원\n", money);
-
-        // 보유 자원 표시
-        show_resources();
-
-        printf("\n1. 자원 채집\n");
-        printf("2. 자원 가공\n");
-        printf("3. 전체 판매\n");
-        printf("4. 업그레이드 상점\n");
-        if(gambling_unlocked) printf("5. 도박\n");
-        printf("0. 종료\n");
-        printf("선택: ");
-        scanf("%d", &menu);
-
-        // 치트 코드 적용
-        if(menu == 777) {
-            gambling_unlocked = 1;
-            printf("도박 시스템이 활성화되었습니다!\n");
-            Sleep(1500);
-            continue;
-        }
-        if(menu == 805) {
-            money += 100000;
-            printf("돈 100,000원을 지급받았습니다!\n");
-            Sleep(1500);
-            continue;
-        }
-
-        switch(menu) {
-            case 1: gather_resource(); break;
-            case 2: process_resource(); break;
-            case 3: sell_menu(); break;
-            case 4: shop(); break;
-            case 5: if(gambling_unlocked) gambling(); break;
-            case 0: return 0;
-            default:
-                printf("잘못된 입력\n");
-                Sleep(1000);
-        }
+        printf("%s\n[", title);
+        for(int j=0;j<steps;j++)
+            printf(j<i ? "#" : " ");
+        printf("] %d%%\n", i*100/steps);
+        Sleep(step);
     }
+
+    clear_console_input();
 }
 
-// ------------------ 자원 표시 ------------------
+// ================== 자원 표시 ==================
 void show_resources() {
-    int shown = 0;
+    printf("돈: %d원\n", money);
+    printf("-----------------------------\n");
 
-    if(tree > 0) { printf("나무: %d  ", tree); shown=1; }
-    if(p_tree > 0) { printf("가공 나무: %d  ", p_tree); shown=1; }
-    if(stone > 0) { printf("돌: %d  ", stone); shown=1; }
-    if(p_stone > 0) { printf("가공 돌: %d  ", p_stone); shown=1; }
-    if(iron > 0) { printf("철: %d  ", iron); shown=1; }
-    if(p_iron > 0) { printf("가공 철: %d  ", p_iron); shown=1; }
-    if(gold > 0) { printf("금: %d  ", gold); shown=1; }
-    if(p_gold > 0) { printf("가공 금: %d  ", p_gold); shown=1; }
-    if(diamond > 0) { printf("다이아몬드: %d  ", diamond); shown=1; }
-    if(p_diamond > 0) { printf("가공 다이아몬드: %d  ", p_diamond); shown=1; }
+    int empty = 1;
 
-    if(shown) printf("\n");
+    for(int i=0;i<RESOURCE_COUNT;i++){
+        if(resource[i] > 0 || processed[i] > 0){
+            empty = 0;
+            printf("%s:%d", resource_name[i], resource[i]);
+
+            if(processed[i] > 0)
+                printf("  가공%s:%d", resource_name[i], processed[i]);
+
+            printf("\n");
+        }
+    }
+
+    if(empty)
+        printf("보유 자원 없음\n");
+
+    printf("-----------------------------\n");
 }
 
-// ------------------ 자원 채집 ------------------
+// ================== 채집 ==================
 void gather_resource() {
-    int collect_time = 0;
-    char res_name[20] = "나무";
+    int sel;
+    printf("채집할 자원:\n");
+    for(int i=0;i<resource_level;i++)
+        printf("%d. %s\n", i+1, resource_name[i]);
+    printf("선택: ");
+    scanf("%d",&sel); clear_input();
+    sel--;
 
-    switch(resource_level) {
-        case 1: collect_time = collect_speed_tree; sprintf(res_name,"나무"); break;
-        case 2: collect_time = collect_speed_stone; sprintf(res_name,"돌"); break;
-        case 3: collect_time = collect_speed_iron; sprintf(res_name,"철"); break;
-        case 4: collect_time = collect_speed_gold; sprintf(res_name,"금"); break;
-        case 5: collect_time = collect_speed_diamond; sprintf(res_name,"다이아몬드"); break;
-    }
+    if(sel<0||sel>=resource_level) return;
 
-    printf("%s 채집 중...\n", res_name);
-    Sleep(collect_time);
+    progress_bar("자원 채집 중...", collect_speed[sel]);
 
-    switch(resource_level) {
-        case 1: tree++; printf("%s 채집 완료! 현재 나무: %d\n", res_name, tree); break;
-        case 2: stone++; printf("%s 채집 완료! 현재 돌: %d\n", res_name, stone); break;
-        case 3: iron++; printf("%s 채집 완료! 현재 철: %d\n", res_name, iron); break;
-        case 4: gold++; printf("%s 채집 완료! 현재 금: %d\n", res_name, gold); break;
-        case 5: diamond++; printf("%s 채집 완료! 현재 다이아몬드: %d\n", res_name, diamond); break;
-    }
-
-    Sleep(1000);
+    if(auto_process_unlocked)
+        processed[sel]++;
+    else
+        resource[sel]++;
 }
 
-// ------------------ 자원 가공 ------------------
+// ================== 가공 ==================
 void process_resource() {
-    int process_time = 0;
-    char res_name[20] = "나무";
+    if(auto_process_unlocked) return;
 
-    if(tree==0 && stone==0 && iron==0 && gold==0 && diamond==0) {
-        printf("가공할 자원이 없습니다.\n");
-        Sleep(1000);
-        return;
+    int sel;
+    printf("가공할 자원:\n");
+    for(int i=0;i<RESOURCE_COUNT;i++)
+        if(resource[i]>0)
+            printf("%d. %s\n", i+1, resource_name[i]);
+    printf("선택: ");
+    scanf("%d",&sel); clear_input();
+    sel--;
+
+    if(sel<0||sel>=RESOURCE_COUNT||resource[sel]==0) return;
+
+    progress_bar("자원 가공 중...", process_speed[sel]);
+    resource[sel]--;
+    processed[sel]++;
+}
+
+// ================== 판매 ==================
+void sell_all() {
+    int total=0;
+    for(int i=0;i<RESOURCE_COUNT;i++){
+        total += resource[i]*price[i];
+        total += processed[i]*price[i]*2;
+        resource[i]=processed[i]=0;
+    }
+    money+=total;
+    printf("판매 완료! +%d원\n", total);
+    Sleep(1200);
+}
+
+// ================== 자동 채집 ==================
+void auto_collect_tick() {
+    if(!auto_collect_unlocked) return;
+
+    int r = rand()%RESOURCE_COUNT;
+    int base[RESOURCE_COUNT]={10,8,5,3,1};
+    int gain = base[r]*auto_collect_level;
+
+    if(auto_process_unlocked)
+        processed[r]+=gain;
+    else
+        resource[r]+=gain;
+}
+
+// ================== 도박 ==================
+void gamble() {
+    int bet, s[3], nums[3]={1,3,7};
+
+    system("cls");
+    printf("===== 도박 =====\n");
+    printf("배팅 금액 (최소 1000원, 0 취소): ");
+    scanf("%d",&bet); clear_input();
+
+    if(bet==0||bet<1000||bet>money) return;
+    money-=bet;
+
+    for(int i=0;i<3;i++)
+        s[i]=nums[rand()%3];
+
+    printf("\n[ %d ] [ %d ] [ %d ]\n", s[0],s[1],s[2]);
+
+    int c1=0,c3=0,c7=0;
+    for(int i=0;i<3;i++){
+        if(s[i]==1) c1++;
+        if(s[i]==3) c3++;
+        if(s[i]==7) c7++;
     }
 
-    if(tree>0) { process_time = process_speed_tree; sprintf(res_name,"나무"); }
-    else if(stone>0) { process_time = process_speed_stone; sprintf(res_name,"돌"); }
-    else if(iron>0) { process_time = process_speed_iron; sprintf(res_name,"철"); }
-    else if(gold>0) { process_time = process_speed_gold; sprintf(res_name,"금"); }
-    else if(diamond>0) { process_time = process_speed_diamond; sprintf(res_name,"다이아몬드"); }
+    float m=0;
+    if(c1==3) m=10;
+    else if(c3==3) m=50;
+    else if(c7==3) m=100;
+    else if(c7==2) m=3;
+    else if(c3==2) m=1;
+    else if(c1==2) m=0.5f;
 
-    printf("%s 가공 중...\n", res_name);
-    Sleep(process_time);
+    int win=(int)(bet*m);
+    money+=win;
 
-    if(tree>0) { tree--; p_tree++; printf("%s 가공 완료! 가공 나무: %d\n", res_name, p_tree); }
-    else if(stone>0) { stone--; p_stone++; printf("%s 가공 완료! 가공 돌: %d\n", res_name, p_stone); }
-    else if(iron>0) { iron--; p_iron++; printf("%s 가공 완료! 가공 철: %d\n", res_name, p_iron); }
-    else if(gold>0) { gold--; p_gold++; printf("%s 가공 완료! 가공 금: %d\n", res_name, p_gold); }
-    else if(diamond>0) { diamond--; p_diamond++; printf("%s 가공 완료! 가공 다이아몬드: %d\n", res_name, p_diamond); }
-
-    Sleep(1000);
+    printf("배율 %.1f배 / 획득 %d원\n", m, win);
+    Sleep(2000);
+}
+// ================== 안내 문구 ==================
+const char* guide_text =
+"이 게임은 자원을 채집하고 가공해 돈을 버는 게임입니다.\n"
+"상점에서 자동화와 자원 업그레이드를 해금할 수 있습니다.\n"
+"자원을 가공시키면 돈을 2배로 받습니다.\n"
+"엔딩은 1000000원입니다.\n"
+"숨겨진 요소도 있으니 잘 찾아보세요!\n"
+"\n                          -제작자 Hyunjae11-\n";
+// ================== 안내 ==================
+void show_guide() {
+    system("cls");
+    printf("===== 안내 =====\n%s\n", guide_text);
+    system("pause");
 }
 
-// ------------------ 전체 판매 ------------------
-void sell_menu() {
-    int total = 0;
-
-    total += tree*price_tree; total += p_tree*price_tree*2;
-    total += stone*price_stone; total += p_stone*price_stone*2;
-    total += iron*price_iron; total += p_iron*price_iron*2;
-    total += gold*price_gold; total += p_gold*price_gold*2;
-    total += diamond*price_diamond; total += p_diamond*price_diamond*2;
-
-    printf("전체 판매 완료! 획득 돈: %d원\n", total);
-
-    money += total;
-
-    tree = stone = iron = gold = diamond = 0;
-    p_tree = p_stone = p_iron = p_gold = p_diamond = 0;
-
-    Sleep(1500);
-}
-
-// ------------------ 상점 ------------------
+// ================== 상점 ==================
 void shop() {
     int sel;
     system("cls");
 
-    static int collect_level = 0;
-    static int process_level = 0;
-    static int resource_cost_level = 0;
-    static int value_level = 0; // 자원 가치 업그레이드 단계
-
-    int collect_cost = 200 + collect_level*100;
-    int process_cost = 300 + process_level*150;
-    int resource_cost = 500 + resource_cost_level*200;
-    int value_cost = 400 + value_level*200; // 자원 가치 업그레이드 가격
-
-    printf("===== 업그레이드 상점 =====\n");
-    printf("1. 채집 속도 업그레이드 (가격: %d원)\n", collect_cost);
-    printf("2. 가공 속도 업그레이드 (가격: %d원)\n", process_cost);
+    printf("===== 상점 =====\n");
+    printf("1. 채집 속도 업그레이드 (%d원)\n", collect_upgrade_cost);
+    if(!auto_process_unlocked)
+        printf("2. 가공 속도 업그레이드 (%d원)\n", process_upgrade_cost);
     if(resource_level<5)
-        printf("3. 자원 발견 (현재 레벨 %d, 가격: %d원)\n", resource_level, resource_cost);
-    printf("4. 자원 가치 업그레이드 (가격: %d원)\n", value_cost);
-    printf("0. 뒤로가기\n");
-    printf("선택: ");
-    scanf("%d", &sel);
+        printf("3. 자원 발견 업그레이드 (500원)\n");
+    if(!auto_collect_unlocked)
+        printf("4. 자동 채집 해금 (15000원)\n");
+    if(auto_collect_unlocked)
+        printf("5. 자동 채집 업그레이드 (2000원)\n");
+    if(!auto_process_unlocked)
+        printf("6. 자동 가공 해금 (50000원)\n");
+    if(!auto_sell_unlocked)
+        printf("7. 자동 판매 해금 (8000원)\n");
+    printf("0. 뒤로가기\n선택: ");
 
-    if(sel==1 && money>=collect_cost) {
-        money -= collect_cost;
-        int old_tree = collect_speed_tree;
-        int old_stone = collect_speed_stone;
-        int old_iron = collect_speed_iron;
-        int old_gold = collect_speed_gold;
-        int old_diamond = collect_speed_diamond;
+    scanf("%d",&sel); clear_input();
 
-        collect_level++;
-        collect_speed_tree = (collect_speed_tree>500)?collect_speed_tree-200:collect_speed_tree;
-        collect_speed_stone = (collect_speed_stone>500)?collect_speed_stone-200:collect_speed_stone;
-        collect_speed_iron = (collect_speed_iron>500)?collect_speed_iron-200:collect_speed_iron;
-        collect_speed_gold = (collect_speed_gold>500)?collect_speed_gold-200:collect_speed_gold;
-        collect_speed_diamond = (collect_speed_diamond>500)?collect_speed_diamond-200:collect_speed_diamond;
-
-        printf("채집 속도 업그레이드 완료!\n");
-        printf("나무: %d -> %d ms\n", old_tree, collect_speed_tree);
-        printf("돌: %d -> %d ms\n", old_stone, collect_speed_stone);
-        printf("철: %d -> %d ms\n", old_iron, collect_speed_iron);
-        printf("금: %d -> %d ms\n", old_gold, collect_speed_gold);
-        printf("다이아몬드: %d -> %d ms\n", old_diamond, collect_speed_diamond);
-    } else if(sel==2 && money>=process_cost) {
-        money -= process_cost;
-        int old_tree = process_speed_tree;
-        int old_stone = process_speed_stone;
-        int old_iron = process_speed_iron;
-        int old_gold = process_speed_gold;
-        int old_diamond = process_speed_diamond;
-
-        process_level++;
-        process_speed_tree = (process_speed_tree>500)?process_speed_tree-200:process_speed_tree;
-        process_speed_stone = (process_speed_stone>500)?process_speed_stone-200:process_speed_stone;
-        process_speed_iron = (process_speed_iron>500)?process_speed_iron-200:process_speed_iron;
-        process_speed_gold = (process_speed_gold>500)?process_speed_gold-200:process_speed_gold;
-        process_speed_diamond = (process_speed_diamond>500)?process_speed_diamond-200:process_speed_diamond;
-
-        printf("가공 속도 업그레이드 완료!\n");
-        printf("나무: %d -> %d ms\n", old_tree, process_speed_tree);
-        printf("돌: %d -> %d ms\n", old_stone, process_speed_stone);
-        printf("철: %d -> %d ms\n", old_iron, process_speed_iron);
-        printf("금: %d -> %d ms\n", old_gold, process_speed_gold);
-        printf("다이아몬드: %d -> %d ms\n", old_diamond, process_speed_diamond);
-    } else if(sel==3 && money>=resource_cost && resource_level<5) {
-        money -= resource_cost;
-        resource_level++;
-        resource_cost_level++;
-        printf("새로운 자원을 발견했습니다! 이제 ");
-        switch(resource_level) {
-            case 2: printf("돌"); break;
-            case 3: printf("철"); break;
-            case 4: printf("금"); break;
-            case 5: printf("다이아몬드"); break;
-        }
-        printf("도 채집 가능합니다.\n");
-    } else if(sel==4 && money>=value_cost) {
-        money -= value_cost;
-        value_level++;
-        price_tree += 10;
-        price_stone += 30;
-        price_iron += 60;
-        price_gold += 100;
-        price_diamond += 200;
-        printf("자원 가치 업그레이드 완료! 새로운 판매 가격 적용\n");
-    } else if(sel!=0) {
-        printf("돈이 부족하거나 조건이 맞지 않습니다.\n");
+    if(sel==1 && money>=collect_upgrade_cost){
+        int before = collect_speed[0];
+        for(int i=0;i<RESOURCE_COUNT;i++)
+            if(collect_speed[i]>1000) collect_speed[i]-=200;
+        money-=collect_upgrade_cost;
+        collect_upgrade_cost=(int)(collect_upgrade_cost*1.5f);
+        printf("%dms -> %dms\n", before, collect_speed[0]);
+        Sleep(1200);
     }
-
-    Sleep(1500);
+    else if(sel==2 && !auto_process_unlocked && money>=process_upgrade_cost){
+        int before = process_speed[0];
+        for(int i=0;i<RESOURCE_COUNT;i++)
+            if(process_speed[i]>3000) process_speed[i]-=200;
+        money-=process_upgrade_cost;
+        process_upgrade_cost=(int)(process_upgrade_cost*1.5f);
+        printf("%dms -> %dms\n", before, process_speed[0]);
+        Sleep(1200);
+    }
+    else if(sel==3 && resource_level<5 && money>=500){
+        money-=500;
+        resource_level++;
+        printf("%s 자원 발견!\n", resource_name[resource_level-1]);
+        Sleep(1200);
+    }
+    else if(sel==4 && money>=15000){
+        money-=15000; auto_collect_unlocked=1;
+    }
+    else if(sel==5 && auto_collect_unlocked && money>=2000){
+        money-=2000; auto_collect_level++;
+    }
+    else if(sel==6 && money>=50000){
+        money-=50000; auto_process_unlocked=1;
+    }
+    else if(sel==7 && money>=8000){
+        money-=8000; auto_sell_unlocked=1;
+    }
+    else{
+        printf("구매 실패\n");
+        Sleep(1000);
+    }
 }
 
-// ------------------ 도박 ------------------
-void gambling() {
-    int bet;
-    printf("베팅 금액을 입력하세요 (현재 돈: %d원): ", money);
-    scanf("%d", &bet);
-    if(bet <= 0 || bet > money) {
-        printf("잘못된 금액입니다.\n");
-        Sleep(1000);
-        return;
+// ================== 메인 ==================
+int main() {
+    srand((unsigned)time(NULL));
+    int menu;
+
+    while(1){
+        system("cls");
+        show_resources();
+
+        printf("\n1. 자원 채집\n");
+        if(!auto_process_unlocked) printf("2. 자원 가공\n");
+        printf("3. 전체 판매\n");
+        printf("4. 상점\n");
+        printf("5. 안내\n");
+        if(auto_sell_unlocked) printf("6. 자동 판매 %s\n", auto_sell_on?"OFF":"ON");
+        if(gamble_unlocked) printf("7. 도박\n");
+        printf("8. 엔딩\n");
+        printf("0. 종료\n선택: ");
+
+        scanf("%d",&menu); clear_input();
+
+        if(menu==777){ gamble_unlocked=1; continue; }
+
+        auto_collect_tick();
+
+        switch(menu){
+            case 1: gather_resource(); break;
+            case 2: process_resource(); break;
+            case 3: sell_all(); break;
+            case 4: shop(); break;
+            case 5: show_guide(); break;
+            case 6: auto_sell_on=!auto_sell_on; break;
+            case 7: gamble(); break;
+            case 8:
+                if(money >= 1000000){
+                    system("cls");
+                    printf("엔딩 달성\n");
+                    system("pause");
+                    return 0;
+                }
+                else{
+                    printf("엔딩을 보려면 1,000,000원이 필요합니다\n");
+                    Sleep(1500);
+                }
+                break;
+            case 0: return 0;
+        }
+
+        if(auto_sell_on) sell_all();
     }
-
-    money -= bet;
-
-    int slot[3];
-    for(int i=0;i<3;i++) {
-        int r = rand() % 3;
-        if(r==0) slot[i]=1;
-        else if(r==1) slot[i]=3;
-        else slot[i]=7;
-    }
-
-    printf("슬롯 결과: | %d | %d | %d |\n", slot[0], slot[1], slot[2]);
-
-    int count1=0, count3=0, count7=0;
-    for(int i=0;i<3;i++) {
-        if(slot[i]==1) count1++;
-        if(slot[i]==3) count3++;
-        if(slot[i]==7) count7++;
-    }
-
-    double multiplier = 0.5;
-    if(count1==2) multiplier=1;
-    else if(count3==2) multiplier=2;
-    else if(count7==2) multiplier=3;
-    else if(count1==3) multiplier=5;
-    else if(count3==3) multiplier=10;
-    else if(count7==3) multiplier=137;
-
-    int win = (int)(bet*multiplier);
-    money += win;
-
-    printf("배당률: %.1fx, 획득 돈: %d원\n", multiplier, win);
-    Sleep(2000);
 }

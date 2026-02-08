@@ -12,7 +12,8 @@
 코드는 수정중입니다!!
 
 아래는 코드입니다.
-```#include <stdio.h>
+```
+#include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
 #include <time.h>

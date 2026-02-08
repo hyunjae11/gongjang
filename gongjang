@@ -24,7 +24,7 @@ const int COLLECT_SPEED_MIN = 1000;
 const int PROCESS_SPEED_MIN = 2000;
 
 // ================== 상태 ==================
-int money = 111111110;
+int money = 0;
 int resource_level = 1;
 
 // 업그레이드 비용

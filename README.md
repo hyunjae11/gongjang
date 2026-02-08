@@ -39,7 +39,7 @@ const int COLLECT_SPEED_MIN = 1000;
 const int PROCESS_SPEED_MIN = 2000;
 
 // ================== 상태 ==================
-int money = 0;
+int money = 111111110;
 int resource_level = 1;
 
 // 업그레이드 비용
@@ -182,7 +182,17 @@ void auto_collect_tick(){
 
 // ================== 도박 ==================
 void gamble(){
-    printf("배팅 금액 입력 (0 취소): ");
+    
+printf("=======확률표=======\n");
+printf("   다 다르면   x 0배\n");
+printf("   [1] x 2     x 0.5배\n");
+printf("   [3] x 2     x 1배\n");
+printf("   [7] x 2     x 3배\n");
+printf("==================\n");
+printf("   [1] x 3     x 10배\n");
+printf("   [3] x 3     x 50배\n");
+printf("   [7] x 3     x 137배\n");
+printf("배팅 금액 입력 (0 취소): ");
     int bet = input_int();
     if(bet<=0 || bet>money) return;
 
@@ -380,6 +390,7 @@ int main(){
         }
     }
 }
+
 
 
 ```

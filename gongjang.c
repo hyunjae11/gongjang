@@ -78,7 +78,7 @@ void progress_bar(const char* title, int total_ms){
         Sleep(step);
     }
 
-    clear_console_input();   // ★ 끝난 후 입력 제거 (핵심)
+    clear_console_input();
 }
 
 

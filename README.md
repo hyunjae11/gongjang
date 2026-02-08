@@ -203,7 +203,7 @@ void gamble(){
     }
 
     int win = 0;
-    if(c7==3) win = bet*100;
+    if(c7==3) win = bet*137;
     else if(c3==3) win = bet*50;
     else if(c1==3) win = bet*10;
     else if(c7==2) win = bet*3;
@@ -380,5 +380,6 @@ int main(){
         }
     }
 }
+
 
 ```
